@@ -16,7 +16,7 @@ import { parseAmount, formatMoney, toDecimalString } from '../money.js';
 import {
   resolveSplit, resolvePayers, seedParticipants, SPLIT_MODES, PERCENT_SCALE,
 } from '../split.js';
-import { CATEGORIES } from '../schema.js';
+import { CATEGORIES, LIMITS } from '../schema.js';
 import { todayISO } from '../util/date.js';
 
 // Only ever one sheet at a time, but ids still need to be unique across the
@@ -112,6 +112,16 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
   let amountTouched = false;
   let titleTouched = false;
 
+  /**
+   * Whether the user has hand-entered split values in the current mode.
+   *
+   * Re-seeding overwrites every row with an even split, so it must only ever
+   * happen to values the app itself put there. Blindly re-seeding on each
+   * amount keystroke silently turned a deliberate 700/300 back into 500/500
+   * while still reading "All set" - a wrong bill, saved with no warning.
+   */
+  let valuesTouched = editing && (mode === 'exact' || mode === 'percent');
+
   function selectedIds() {
     return memberIds.filter((id) => selected.has(id));
   }
@@ -167,9 +177,11 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
     if (next === amountMinor) { update(); return; }
     amountMinor = next;
 
-    // Exact and percent are the two modes whose stored values are tied to the
-    // total; leaving them stale would show the user an error they did not cause.
-    if (mode === 'exact' || mode === 'percent') reseed(mode);
+    // Percentages are independent of the total, so the total changing must not
+    // touch them at all. Exact amounts are tied to it, but only re-seed while
+    // the figures are still the app's own even split - once the user has typed
+    // their own, leave them and let the "left to assign" line show the gap.
+    if (mode === 'exact' && !valuesTouched) reseed(mode);
 
     // A single non-zero payer is almost always "the payer covers everything",
     // so keep them in step with the total rather than forcing a re-type.
@@ -315,14 +327,22 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
     checkbox.addEventListener('change', () => {
       if (checkbox.checked) selected.add(m.id);
       else selected.delete(m.id);
-      // The participant set changed, so proportional modes need re-seeding.
-      if (mode === 'exact' || mode === 'percent') reseed(mode);
+      // Adding or removing someone changes what an even split means, but the
+      // same rule applies: never overwrite figures the user typed themselves.
+      if ((mode === 'exact' || mode === 'percent') && !valuesTouched) {
+        reseed(mode);
+      } else if (!checkbox.checked) {
+        // A hand-entered value belonging to someone no longer in the split
+        // would otherwise keep counting toward the total.
+        values[m.id] = 0;
+      }
       syncValueInputs();
       update();
     });
 
     valueInput.addEventListener('input', () => {
       const raw = valueInput.value;
+      valuesTouched = true;
       if (mode === 'percent') {
         values[m.id] = percentFromText(raw);
       } else if (mode === 'shares') {
@@ -351,6 +371,9 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
   const modeSegmented = segmented(SPLIT_MODES, mode, (id) => {
     if (id === mode) return;
     mode = id;
+    // Switching mode reinterprets every figure, so seeding a fresh valid split
+    // is right here - and the new values are the app's, not the user's again.
+    valuesTouched = false;
     reseed(mode);
     modeSegmented.querySelectorAll('.segmented__option').forEach((option, i) => {
       option.setAttribute('aria-pressed', String(SPLIT_MODES[i].id === mode));
@@ -414,11 +437,19 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
 
   function update() {
     const parsed = parseAmount(amountInput.value, code);
-    const amountOk = parsed !== null && parsed > 0;
+    // The store accepts anything, but schema.js clamps an out-of-range amount
+    // to zero on the next load and then drops the expense for not balancing.
+    // Catching it here turns a fat-fingered extra zero into a visible error
+    // instead of an expense that disappears after a reload.
+    const tooLarge = parsed !== null && Math.abs(parsed) > LIMITS.amount;
+    const amountOk = parsed !== null && parsed > 0 && !tooLarge;
+
     amountError.hidden = !(amountTouched && !amountOk);
-    amountError.textContent = parsed === null || parsed === 0
-      ? 'Enter an amount greater than zero.'
-      : 'Amount cannot be negative.';
+    amountError.textContent = tooLarge
+      ? `That is larger than this app can track (max ${formatMoney(LIMITS.amount, currency)}).`
+      : parsed === null || parsed === 0
+        ? 'Enter an amount greater than zero.'
+        : 'Amount cannot be negative.';
     setInvalid(amountInput, amountTouched && !amountOk);
 
     const titleOk = titleInput.value.trim().length > 0;

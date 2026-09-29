@@ -36,7 +36,14 @@ export default function membersView(ctx) {
       return;
     }
 
-    store.addMember(group.id, name);
+    // The store throws if the group vanished (another tab deleting it), so a
+    // failed add can never be reported as a success.
+    try {
+      store.addMember(group.id, name);
+    } catch (error) {
+      toast(error?.message || 'That person could not be added.', { type: 'error' });
+      return;
+    }
     toast(`${name} added.`, { type: 'success' });
   };
 

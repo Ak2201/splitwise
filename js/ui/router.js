@@ -51,6 +51,13 @@ export function navigate(path, { replace = false, back = false } = {}) {
 
   if (replace) window.location.replace(target);
   else window.location.hash = target;
+
+  // `location.hash` updates synchronously but `hashchange` is delivered on a
+  // later task. Anything the caller does straight after navigating - deleting
+  // the very group it was showing, say - would otherwise repaint the old,
+  // now-orphaned view before the route caught up. Render now; the queued
+  // `hashchange` becomes a no-op via the guard in `render`.
+  render();
 }
 
 export function currentPath() {
@@ -59,8 +66,13 @@ export function currentPath() {
 
 let activeTransition = null;
 
-async function render() {
+function render() {
   const path = parseHash();
+  // `navigate` renders synchronously and the browser then fires `hashchange`
+  // for the same URL; without this the route would paint twice and the second
+  // pass would abort the first one's transition.
+  if (path === current) return;
+
   current = path;
   const found = match(path) || match('/');
   if (!found) return;

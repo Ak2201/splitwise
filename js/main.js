@@ -119,11 +119,16 @@ function renderTabs(active) {
   }
 }
 
-let currentView = null;
-let currentParams = {};
-
+/**
+ * Repaint whatever the URL currently points at.
+ *
+ * Deliberately re-resolves the route instead of repainting a remembered view:
+ * a store change can land while a navigation is still in flight (deleting the
+ * group you were just looking at does exactly that), and repainting the
+ * remembered view would render the old screen against data it no longer has.
+ */
 function renderCurrent() {
-  if (currentView) paint(currentView, currentParams);
+  refresh();
 }
 
 function boot() {
@@ -132,11 +137,7 @@ function boot() {
 
   // A share link opened in a fresh browser must not be swallowed by the
   // "no groups yet" screen, so routing happens before anything else.
-  start((view, params) => {
-    currentView = view;
-    currentParams = params;
-    paint(view, params);
-  });
+  start(paint);
 
   store.subscribe(() => {
     applyTheme(store.getState().settings.theme);

@@ -70,6 +70,11 @@ function openImportSheet(ctx) {
     importBtn.disabled = true;
     try {
       const group = await decodeGroup(code);
+      // Decoding is async and only this button was disabled - Cancel, Escape
+      // and a backdrop click all stay live. If the sheet went away while we
+      // were decoding, the user cancelled: don't import behind their back and
+      // don't yank them to a group they chose not to add.
+      if (!dialog.open) return;
       const id = ctx.store.importGroup(group);
       dialog.close('imported');
       ctx.navigate(`/g/${id}`);

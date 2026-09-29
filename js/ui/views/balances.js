@@ -201,7 +201,12 @@ function historySection(group, { currency, nameOf, store, toast }) {
               danger: true,
             });
             if (!ok) return;
-            store.deleteSettlement(group.id, settlement.id);
+            try {
+              store.deleteSettlement(group.id, settlement.id);
+            } catch (error) {
+              toast(error?.message || 'That payment could not be deleted.', { type: 'error' });
+              return;
+            }
             toast('Payment deleted.');
           },
         }, icon(ICONS.trash, { size: 18 })),
@@ -263,15 +268,23 @@ function openSettleSheet(ctx, group, prefill) {
       return;
     }
 
-    store.addSettlement(group.id, {
-      fromMemberId: from.id,
-      toMemberId: to.id,
-      amountMinor,
-      // An empty or half-typed date input reads as '', which would otherwise
-      // become "today" deep inside the store — be explicit about it here.
-      date: isValidISO(dateInput.value) ? dateInput.value : todayISO(),
-      notes: notesInput.value.trim(),
-    });
+    // The group can disappear under an open sheet (another tab deleting it),
+    // in which case the store throws rather than dropping the payment
+    // silently. Never report a payment we did not actually write.
+    try {
+      store.addSettlement(group.id, {
+        fromMemberId: from.id,
+        toMemberId: to.id,
+        amountMinor,
+        // An empty or half-typed date input reads as '', which would otherwise
+        // become "today" deep inside the store — be explicit about it here.
+        date: isValidISO(dateInput.value) ? dateInput.value : todayISO(),
+        notes: notesInput.value.trim(),
+      });
+    } catch (error) {
+      errorEl.textContent = error?.message || 'That payment could not be saved.';
+      return;
+    }
 
     dialog.close('saved');
     toast(`${from.name} paid ${to.name} ${formatMoney(amountMinor, currency)}.`, { type: 'success' });

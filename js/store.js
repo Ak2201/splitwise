@@ -89,6 +89,20 @@ function touch(group) {
   group.updatedAt = new Date().toISOString();
 }
 
+/**
+ * Every mutator below targets a group by id, and that group can legitimately
+ * vanish underneath it - another tab deleting it fires the `storage` listener
+ * and swaps out `state` while a sheet is still open here. Returning quietly in
+ * that case is the dangerous option: the caller closes its sheet and toasts
+ * "payment recorded" over a write that never happened. Failing loudly lets the
+ * few call sites that handle errors say something true instead.
+ */
+function requireGroup(s, groupId) {
+  const group = s.groups[groupId];
+  if (!group) throw new Error('That group no longer exists on this device.');
+  return group;
+}
+
 // --- lifecycle -------------------------------------------------------------
 
 export function init() {
@@ -180,8 +194,7 @@ export function createGroup({ name, type = 'other', currency, memberNames = [] }
 
 export function updateGroup(groupId, patch) {
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     Object.assign(group, patch);
     touch(group);
   });
@@ -239,8 +252,7 @@ export function replaceState(rawState) {
 export function addMember(groupId, name) {
   const id = newId();
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.members.push({
       id,
       name: String(name).trim() || `Person ${group.members.length + 1}`,
@@ -310,8 +322,7 @@ export function addExpense(groupId, expense) {
   const id = newId();
   const now = new Date().toISOString();
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.expenses.push({ ...expense, id, createdAt: now, updatedAt: now });
     touch(group);
   }, { immediate: true });
@@ -320,9 +331,9 @@ export function addExpense(groupId, expense) {
 
 export function updateExpense(groupId, expenseId, patch) {
   commit((s) => {
-    const group = s.groups[groupId];
-    const index = group?.expenses.findIndex((e) => e.id === expenseId);
-    if (index === undefined || index < 0) return;
+    const group = requireGroup(s, groupId);
+    const index = group.expenses.findIndex((e) => e.id === expenseId);
+    if (index < 0) throw new Error('That expense no longer exists.');
     group.expenses[index] = {
       ...group.expenses[index],
       ...patch,
@@ -335,8 +346,7 @@ export function updateExpense(groupId, expenseId, patch) {
 
 export function deleteExpense(groupId, expenseId) {
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.expenses = group.expenses.filter((e) => e.id !== expenseId);
     touch(group);
   }, { immediate: true });
@@ -347,8 +357,7 @@ export function deleteExpense(groupId, expenseId) {
 export function addSettlement(groupId, settlement) {
   const id = newId();
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.settlements.push({
       ...settlement,
       id,
@@ -362,8 +371,7 @@ export function addSettlement(groupId, settlement) {
 
 export function deleteSettlement(groupId, settlementId) {
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.settlements = group.settlements.filter((x) => x.id !== settlementId);
     touch(group);
   }, { immediate: true });
@@ -374,8 +382,7 @@ export function deleteSettlement(groupId, settlementId) {
 export function addTemplate(groupId, template) {
   const id = newId();
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.recurring.push({ ...template, id });
     touch(group);
   }, { immediate: true });
@@ -384,9 +391,9 @@ export function addTemplate(groupId, template) {
 
 export function updateTemplate(groupId, templateId, patch) {
   commit((s) => {
-    const group = s.groups[groupId];
-    const template = group?.recurring.find((t) => t.id === templateId);
-    if (!template) return;
+    const group = requireGroup(s, groupId);
+    const template = group.recurring.find((t) => t.id === templateId);
+    if (!template) throw new Error('That recurring expense no longer exists.');
     Object.assign(template, patch, { id: templateId });
     touch(group);
   }, { immediate: true });
@@ -394,8 +401,7 @@ export function updateTemplate(groupId, templateId, patch) {
 
 export function deleteTemplate(groupId, templateId) {
   commit((s) => {
-    const group = s.groups[groupId];
-    if (!group) return;
+    const group = requireGroup(s, groupId);
     group.recurring = group.recurring.filter((t) => t.id !== templateId);
     touch(group);
   }, { immediate: true });

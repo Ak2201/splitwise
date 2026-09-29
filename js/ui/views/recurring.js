@@ -30,12 +30,22 @@ export default function recurringView(ctx) {
       danger: true,
     });
     if (!ok) return;
-    store.deleteTemplate(group.id, template.id);
+    try {
+      store.deleteTemplate(group.id, template.id);
+    } catch (error) {
+      toast(error?.message || 'That could not be deleted.', { type: 'error' });
+      return;
+    }
     toast('Recurring expense deleted.');
   };
 
   const togglePaused = (template) => {
-    store.updateTemplate(group.id, template.id, { active: !template.active });
+    try {
+      store.updateTemplate(group.id, template.id, { active: !template.active });
+    } catch (error) {
+      toast(error?.message || 'That could not be changed.', { type: 'error' });
+      return;
+    }
     toast(template.active ? 'Paused.' : 'Resumed.');
   };
 
@@ -291,24 +301,29 @@ function openTemplateSheet(ctx, group, existing) {
       owedMinor: split.owed,
     };
 
-    if (existing) {
-      // Moving the start date only re-aims the schedule while nothing has been
-      // generated yet. Once expenses exist, rewinding nextDueDate would create
-      // duplicates of them on the next open, so the existing cursor stands.
-      const patch = { frequency: frequencySelect.value, interval, startDate, endDate, expense };
-      if (!existing.lastGeneratedDate) patch.nextDueDate = startDate;
-      store.updateTemplate(group.id, existing.id, patch);
-    } else {
-      store.addTemplate(group.id, {
-        active: true,
-        frequency: frequencySelect.value,
-        interval,
-        startDate,
-        nextDueDate: startDate,
-        endDate,
-        lastGeneratedDate: null,
-        expense,
-      });
+    try {
+      if (existing) {
+        // Moving the start date only re-aims the schedule while nothing has been
+        // generated yet. Once expenses exist, rewinding nextDueDate would create
+        // duplicates of them on the next open, so the existing cursor stands.
+        const patch = { frequency: frequencySelect.value, interval, startDate, endDate, expense };
+        if (!existing.lastGeneratedDate) patch.nextDueDate = startDate;
+        store.updateTemplate(group.id, existing.id, patch);
+      } else {
+        store.addTemplate(group.id, {
+          active: true,
+          frequency: frequencySelect.value,
+          interval,
+          startDate,
+          nextDueDate: startDate,
+          endDate,
+          lastGeneratedDate: null,
+          expense,
+        });
+      }
+    } catch (error) {
+      errorEl.textContent = error?.message || 'That could not be saved.';
+      return;
     }
 
     dialog.close('saved');
