@@ -63,7 +63,11 @@ export default function membersView(ctx) {
       return;
     }
 
-    store.renameMember(group.id, member.id, name);
+    try {
+      store.renameMember(group.id, member.id, name);
+    } catch (error) {
+      toast(error?.message || 'That name could not be changed.', { type: 'error' });
+    }
   };
 
   const remove = async (member) => {

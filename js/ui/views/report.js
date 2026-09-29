@@ -261,7 +261,7 @@ export default function reportView(ctx) {
       textButtons('Full summary', () => fullText(group))),
 
     h('div.section-title', { text: 'Backup and sharing' }),
-    card('JSON backup of this group', 'Everything in this group, in a file the app can read back. This is the safe way to move a big group between devices.', [
+    card('JSON backup of this group', 'Everything in this group, in a file the app can read back. Restoring it in Settings adds the group alongside your others — it does not replace them. The safe way to move a big group between devices.', [
       button('Download backup', ICONS.download,
         () => download('Backup', () => downloadJson(`${fileStem(group, 'backup')}.json`, buildGroupBackup(group))),
         { primary: true }),

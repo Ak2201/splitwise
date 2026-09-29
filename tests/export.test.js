@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { escapeCell, toCsv, expensesCsv, balancesCsv, fileStem } from '../js/export/csv.js';
 import { settlementText, fullText } from '../js/export/text.js';
-import { buildBackup, parseBackup, BACKUP_KIND } from '../js/export/json.js';
+import { buildBackup, buildGroupBackup, parseBackup, readBackup, BACKUP_KIND } from '../js/export/json.js';
 import { normaliseGroup, normaliseState } from '../js/schema.js';
 
 const group = normaliseGroup({
@@ -149,4 +149,45 @@ test('parseBackup accepts a bare state and rejects junk', () => {
   assert.throws(() => parseBackup('not json'), /not valid JSON/i);
   assert.throws(() => parseBackup('null'), /empty/i);
   assert.throws(() => parseBackup('{"unrelated":true}'), /does not look like a backup/i);
+});
+
+
+test('a whole-library backup and a single-group export are distinguishable', () => {
+  const state = normaliseState({ groups: { g1: group }, activeGroupId: 'g1' });
+
+  const all = readBackup(JSON.stringify(buildBackup(state)));
+  assert.equal(all.scope, 'all');
+  assert.equal(all.groups.length, 1);
+
+  const one = readBackup(JSON.stringify(buildGroupBackup(group)));
+  assert.equal(one.scope, 'group', 'restoring this must add, not replace everything');
+  assert.equal(one.groups.length, 1);
+  assert.equal(one.groups[0].name, 'Goa trip');
+});
+
+test('a multi-group library file is treated as a full backup', () => {
+  const second = normaliseGroup({ ...group, id: 'g2', name: 'Second' });
+  const state = normaliseState({ groups: { g1: group, g2: second } });
+  assert.equal(readBackup(JSON.stringify(buildBackup(state))).scope, 'all');
+});
+
+test('an unmarked file falls back to the safe reading', () => {
+  // Written before `scope` existed: one group means "add", several mean "replace".
+  const oneGroup = { kind: BACKUP_KIND, version: 1, state: { groups: { g1: group } } };
+  assert.equal(readBackup(JSON.stringify(oneGroup)).scope, 'group');
+
+  const second = normaliseGroup({ ...group, id: 'g2', name: 'Second' });
+  const twoGroups = { kind: BACKUP_KIND, version: 1, state: { groups: { g1: group, g2: second } } };
+  assert.equal(readBackup(JSON.stringify(twoGroups)).scope, 'all');
+
+  // A bare group object, no envelope at all.
+  assert.equal(readBackup(JSON.stringify(group)).scope, 'group');
+});
+
+test('readBackup rejects the same junk parseBackup does', () => {
+  assert.throws(() => readBackup('not json'), /not valid JSON/i);
+  assert.throws(() => readBackup('null'), /empty/i);
+  assert.throws(() => readBackup('{"unrelated":true}'), /does not look like a backup/i);
+  // parseBackup still returns just the state, for callers that only replace.
+  assert.ok(parseBackup(JSON.stringify(buildBackup(normaliseState({ groups: { g1: group } })))).groups);
 });

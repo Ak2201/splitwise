@@ -5,8 +5,11 @@
  * through the action functions below so every change is validated, timestamped
  * and persisted the same way.
  *
- * Writes are debounced: typing in an expense form can fire many updates a
- * second, and serialising the whole store on each keystroke is wasteful.
+ * Every mutation writes through to localStorage immediately. The debounce
+ * machinery below is kept for a caller that genuinely needs to coalesce, but
+ * nothing uses it: forms here commit once on save rather than per keystroke,
+ * and a pending write is a window in which another tab's `storage` event can
+ * replace `state` wholesale and silently discard the change.
  */
 import { migrate, normaliseState, normaliseGroup, MEMBER_COLORS, SCHEMA_VERSION } from './schema.js';
 import { generateDue } from './recurring.js';
@@ -107,10 +110,20 @@ function requireGroup(s, groupId) {
 
 export function init() {
   state = normaliseState(migrate(readStorage()));
-  runRecurring();
+  // Deliberately does NOT run recurring generation: `main.js` calls
+  // `runRecurring()` once, after boot, and tells the user what was created.
+  // Doing it here too meant the first pass silently advanced every template
+  // and the second pass - the one whose result is shown - always came back
+  // empty, so the user never learned where the new expenses came from.
+
   // Another tab of the same app changing data should not leave this one stale.
   window.addEventListener('storage', (event) => {
     if (event.key !== STORAGE_KEY || event.newValue === null) return;
+    // Adopting the other tab's copy discards whatever is still queued here.
+    // Flushing first at least persists our own pending write before it is
+    // overwritten in memory; the mutators that could sit in that window are
+    // all `immediate` now, so this is a backstop rather than the main defence.
+    flush();
     try {
       state = normaliseState(migrate(JSON.parse(event.newValue)));
       notify();
@@ -154,7 +167,7 @@ export function updateSettings(patch) {
 }
 
 export function setActiveGroup(groupId) {
-  commit((s) => { s.activeGroupId = s.groups[groupId] ? groupId : null; });
+  commit((s) => { s.activeGroupId = s.groups[groupId] ? groupId : null; }, { immediate: true });
 }
 
 // --- groups ----------------------------------------------------------------
@@ -197,7 +210,7 @@ export function updateGroup(groupId, patch) {
     const group = requireGroup(s, groupId);
     Object.assign(group, patch);
     touch(group);
-  });
+  }, { immediate: true });
 }
 
 export function deleteGroup(groupId) {
@@ -265,11 +278,12 @@ export function addMember(groupId, name) {
 
 export function renameMember(groupId, memberId, name) {
   commit((s) => {
-    const member = s.groups[groupId]?.members.find((m) => m.id === memberId);
-    if (!member) return;
+    const group = requireGroup(s, groupId);
+    const member = group.members.find((m) => m.id === memberId);
+    if (!member) throw new Error('That person is no longer in this group.');
     member.name = String(name).trim() || member.name;
-    touch(s.groups[groupId]);
-  });
+    touch(group);
+  }, { immediate: true });
 }
 
 /**

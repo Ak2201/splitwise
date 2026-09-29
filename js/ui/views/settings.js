@@ -8,7 +8,7 @@
 import { h, icon, ICONS } from '../../util/dom.js';
 import { openSheet, confirmAction, field, segmented } from '../components.js';
 import { todayISO } from '../../util/date.js';
-import { buildBackup, parseBackup } from '../../export/json.js';
+import { buildBackup, readBackup } from '../../export/json.js';
 import { downloadJson, pickFile } from '../../export/download.js';
 import { decodeGroup, readShareCodeFromHash } from '../../share.js';
 
@@ -112,13 +112,36 @@ async function restoreFromBackup(ctx) {
     const file = await pickFile('application/json,.json');
     if (!file) return;
 
-    const state = parseBackup(file.text);
-    const incoming = Object.keys(state.groups || {}).length;
+    const { scope, state, groups } = readBackup(file.text);
 
+    // A single-group file is almost always "put this group back", not "throw
+    // away everything else". Adding it is both the likelier intent and the
+    // recoverable choice: an unwanted extra group can be deleted, whereas
+    // groups destroyed by a needless replace are gone.
+    if (scope === 'group' && groups.length === 1) {
+      const name = groups[0]?.name || 'that group';
+      const ok = await confirmAction({
+        title: 'Add this group?',
+        message: `"${file.name}" holds one group, ${name}. It will be added alongside `
+          + 'what you already have. Nothing currently in this browser is removed.',
+        confirmLabel: 'Add group',
+      });
+      if (!ok) return;
+
+      ctx.store.importGroup(groups[0]);
+      ctx.toast(`${name} added.`, { type: 'success' });
+      return;
+    }
+
+    const incoming = groups.length;
+    const existing = Object.keys(ctx.state.groups).length;
     const ok = await confirmAction({
       title: 'Replace everything?',
       message: `Restoring "${file.name}" replaces all data currently in this browser with the ${incoming} `
-        + `${incoming === 1 ? 'group' : 'groups'} in that file. Anything here that is not in the backup will be lost.`,
+        + `${incoming === 1 ? 'group' : 'groups'} in that file. `
+        + (existing > 0
+          ? `Your ${existing} current ${existing === 1 ? 'group' : 'groups'} will be lost.`
+          : 'There is nothing here to lose.'),
       confirmLabel: 'Replace my data',
       danger: true,
     });

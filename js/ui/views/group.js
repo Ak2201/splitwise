@@ -25,6 +25,16 @@ const MAX_INLINE_BALANCES = 6;
 
 const filters = { groupId: null, query: '', category: 'all' };
 
+/**
+ * Where the caret was in the search box, so a repaint can put it back.
+ *
+ * A store change anywhere (another tab writing, a recurring expense firing)
+ * rebuilds this view, which means a brand-new search input. Without this, the
+ * keystrokes still inside the debounce window - and the caret - are lost
+ * mid-word.
+ */
+const searchFocus = { active: false, start: 0, end: 0 };
+
 export default function groupView(ctx) {
   const { group, store, navigate, toast } = ctx;
 
@@ -52,6 +62,9 @@ export default function groupView(ctx) {
     filters.groupId = group.id;
     filters.query = '';
     filters.category = 'all';
+    // Arriving from another group is a fresh screen, not a repaint, so the
+    // caret should not be yanked into the search box.
+    searchFocus.active = false;
   }
 
   const currency = group.currency || { code: 'INR', symbol: '₹' };
@@ -163,7 +176,12 @@ export default function groupView(ctx) {
           confirmLabel: 'Delete',
           danger: true,
         });
-        if (ok) store.deleteSettlement(group.id, settlement.id);
+        if (!ok) return;
+        try {
+          store.deleteSettlement(group.id, settlement.id);
+        } catch (error) {
+          toast(error?.message || 'That payment could not be deleted.', { type: 'error' });
+        }
       },
     });
 
@@ -219,11 +237,41 @@ export default function groupView(ctx) {
     autocomplete: 'off',
   });
 
-  const applyQuery = debounce(() => {
+  const applyQuery = debounce(renderList, 180);
+
+  searchInput.addEventListener('input', () => {
+    // Commit the text immediately so a repaint mid-debounce re-seeds the new
+    // input with what has actually been typed; only the (costlier) list
+    // rebuild waits for the pause in typing.
     filters.query = searchInput.value;
-    renderList();
-  }, 180);
-  searchInput.addEventListener('input', applyQuery);
+    applyQuery();
+  });
+
+  const rememberCaret = () => {
+    searchFocus.active = document.activeElement === searchInput;
+    if (!searchFocus.active) return;
+    searchFocus.start = searchInput.selectionStart ?? searchInput.value.length;
+    searchFocus.end = searchInput.selectionEnd ?? searchInput.value.length;
+  };
+  searchInput.addEventListener('input', rememberCaret);
+  searchInput.addEventListener('keyup', rememberCaret);
+  searchInput.addEventListener('click', rememberCaret);
+  searchInput.addEventListener('focus', rememberCaret);
+  searchInput.addEventListener('blur', () => { searchFocus.active = false; });
+
+  // Runs after this view's nodes are in the document.
+  if (searchFocus.active) {
+    queueMicrotask(() => {
+      if (!searchInput.isConnected || !searchFocus.active) return;
+      searchInput.focus();
+      try {
+        searchInput.setSelectionRange(searchFocus.start, searchFocus.end);
+      } catch {
+        // Some browsers refuse setSelectionRange on type="search"; focus alone
+        // is still better than dropping the user out of the field.
+      }
+    });
+  }
 
   const categoryFilter = h('select.select', { 'aria-label': 'Filter by category' }, [
     h('option', { value: 'all', text: 'All categories' }),
@@ -295,7 +343,12 @@ export default function groupView(ctx) {
         value: group.name,
         confirmLabel: 'Save',
       });
-      if (name) store.updateGroup(group.id, { name });
+      if (!name) return;
+      try {
+        store.updateGroup(group.id, { name });
+      } catch (error) {
+        toast(error?.message || 'That group could not be renamed.', { type: 'error' });
+      }
     };
 
     const remove = async () => {

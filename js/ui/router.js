@@ -12,6 +12,15 @@ let onRender = () => {};
 let current = null;
 let depth = 0;
 
+/**
+ * Whether the pending route change came from `navigate` (so we know which way
+ * the user is going) or from the browser's own Back/Forward buttons, which
+ * reach us only as a `hashchange`. Keeping the last `navigate`'s direction for
+ * a browser Back would animate it the wrong way, so an unknown direction drops
+ * the attribute and gets the plain cross-fade instead.
+ */
+let directionKnown = false;
+
 /** register('/g/:id/balances', viewFn) */
 export function register(pattern, view) {
   const names = [];
@@ -48,6 +57,7 @@ export function navigate(path, { replace = false, back = false } = {}) {
   // "back" from a nested view animates the way the user expects.
   depth = back ? Math.max(0, depth - 1) : depth + 1;
   document.documentElement.dataset.nav = back ? 'back' : 'forward';
+  directionKnown = true;
 
   if (replace) window.location.replace(target);
   else window.location.hash = target;
@@ -73,11 +83,21 @@ function render() {
   // pass would abort the first one's transition.
   if (path === current) return;
 
+  if (!directionKnown) delete document.documentElement.dataset.nav;
+  directionKnown = false;
+
   current = path;
   const found = match(path) || match('/');
   if (!found) return;
 
-  const run = () => onRender(found.route.view, found.params, path);
+  // A View Transition defers this callback to a later task, by which time a
+  // second navigation may already have painted. Repainting then would put the
+  // screen the user just left back on top of the one they are now on, with the
+  // URL disagreeing with what is drawn - so a superseded run does nothing.
+  const run = () => {
+    if (parseHash() !== path) return;
+    onRender(found.route.view, found.params, path);
+  };
 
   const canAnimate = document.startViewTransition
     && !window.matchMedia('(prefers-reduced-motion: reduce)').matches

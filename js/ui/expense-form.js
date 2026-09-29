@@ -524,6 +524,36 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
     // so the list can still flag it as recurring.
     if (expense?.recurringId) payload.recurringId = expense.recurringId;
 
+    // This sheet is a snapshot taken when it opened, and the group underneath
+    // it can change while it is open - another tab removing someone is the
+    // realistic case. Saving a reference to a member who no longer exists
+    // writes an expense that no longer balances once schema.js filters them
+    // out, and it is then dropped on the next load. Re-check against live
+    // state and refuse rather than write something that will quietly vanish.
+    const live = store.getGroup(group.id);
+    if (!live) {
+      toast('That group no longer exists on this device.', { type: 'error' });
+      return;
+    }
+    const liveIds = new Set(live.members.map((m) => m.id));
+    const missing = [
+      ...payload.payers.map((p) => p.memberId),
+      ...Object.keys(payload.owedMinor),
+    ].filter((id) => !liveIds.has(id));
+
+    if (missing.length > 0) {
+      const names = [...new Set(missing)]
+        .map((id) => memberById.get(id)?.name)
+        .filter(Boolean);
+      toast(
+        names.length > 0
+          ? `${names.join(' and ')} was removed from this group somewhere else. Reopen this expense to start again.`
+          : 'Someone in this split was removed from the group. Reopen this expense to start again.',
+        { type: 'error' },
+      );
+      return;
+    }
+
     try {
       if (editing) store.updateExpense(group.id, expense.id, payload);
       else store.addExpense(group.id, payload);
@@ -560,7 +590,12 @@ export function openExpenseForm({ group, store, expense = null, onSaved }) {
         danger: true,
       });
       if (!ok) return;
-      store.deleteExpense(group.id, expense.id);
+      try {
+        store.deleteExpense(group.id, expense.id);
+      } catch (error) {
+        toast(error?.message || 'That expense could not be deleted.', { type: 'error' });
+        return;
+      }
       onSaved?.();
       dialog.close('deleted');
     });
