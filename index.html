@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Splitly</title>
+<meta name="description" content="Split shared expenses with friends. Everything stays in your browser.">
+<meta name="theme-color" content="#14866b" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101315" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2314866b'/><path d='M50 18v64M30 34h28a10 10 0 0 1 0 20H42a10 10 0 0 0 0 20h28' stroke='white' stroke-width='9' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Splitly">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/components.css">
+<link rel="stylesheet" href="styles/print.css">
+</head>
+<body>
+<a class="visually-hidden" href="#main">Skip to content</a>
+
+<div class="app">
+  <header class="app-header no-print" id="app-header"></header>
+  <main class="app-main" id="main" tabindex="-1"></main>
+</div>
+
+<nav class="tabbar no-print" id="tabbar" aria-label="Main"></nav>
+
+<noscript>
+  <p style="padding:24px;text-align:center">Splitly needs JavaScript. Everything runs in your browser — there is no server to fall back to.</p>
+</noscript>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

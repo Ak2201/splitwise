@@ -1,0 +1,158 @@
+/* Print layout - this is the PDF export.
+   Choosing "Save as PDF" in the browser's print dialog produces the report,
+   which is why there is no PDF library in this project. */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+
+  :root {
+    /* Force light tokens: a dark-mode screenshot wastes a cartridge and
+       reads badly on paper. */
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f4f5f6;
+    --surface-hover: #ffffff;
+    --border: #d6dade;
+    --border-strong: #b8bfc5;
+    --text: #000000;
+    --text-muted: #3d454b;
+    --text-faint: #6b7378;
+    --positive: #0c5c49;
+    --negative: #96301f;
+    --positive-soft: #eef6f3;
+    --negative-soft: #fbefec;
+    --accent: #0c5c49;
+    --accent-soft: #eef6f3;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 10.5pt;
+    padding: 0;
+  }
+
+  /* Everything that is chrome rather than content. */
+  .app-header,
+  .tabbar,
+  .fab,
+  .toast-host,
+  .no-print,
+  dialog,
+  .btn {
+    display: none !important;
+  }
+
+  .app-main {
+    max-width: none;
+    padding: 0;
+  }
+
+  .card,
+  .list {
+    border: 1px solid var(--border);
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  a { text-decoration: none; color: inherit; }
+
+  /* --- the report itself -------------------------------------------------- */
+
+  .report { display: block !important; }
+
+  .report__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12pt;
+    padding-bottom: 8pt;
+    margin-bottom: 14pt;
+    border-bottom: 2pt solid var(--text);
+  }
+
+  .report__title { font-size: 19pt; font-weight: 700; }
+  .report__meta { font-size: 9pt; color: var(--text-muted); text-align: right; }
+
+  .report__section { margin-bottom: 16pt; break-inside: avoid; }
+
+  .report__section h2 {
+    font-size: 11pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding-bottom: 4pt;
+    margin-bottom: 7pt;
+    border-bottom: 0.5pt solid var(--border);
+  }
+
+  .report table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+
+  /* Column headers only. A `th[scope=row]` is a label inside the body and must
+     match its own row's `td`, or the rule below draws a heavier line under half
+     the row and a lighter one under the other half. */
+  .report thead th {
+    text-align: left;
+    font-weight: 650;
+    padding: 4pt 6pt;
+    border-bottom: 1pt solid var(--border-strong);
+  }
+
+  .report tbody th {
+    text-align: left;
+    font-weight: 550;
+    padding: 4pt 6pt;
+    border-bottom: 0.5pt solid var(--border);
+  }
+
+  .report thead { display: table-header-group; }
+  .report tfoot { display: table-footer-group; }
+
+  .report td {
+    padding: 4pt 6pt;
+    border-bottom: 0.5pt solid var(--border);
+    vertical-align: top;
+  }
+
+  .report tr { break-inside: avoid; }
+
+  .report .num,
+  .report th.num,
+  .report td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .report tfoot td {
+    font-weight: 700;
+    border-top: 1pt solid var(--text);
+    border-bottom: none;
+  }
+
+  .report__settle li {
+    padding: 3pt 0;
+    border-bottom: 0.5pt dotted var(--border);
+  }
+
+  .report__foot {
+    margin-top: 18pt;
+    padding-top: 6pt;
+    border-top: 0.5pt solid var(--border);
+    font-size: 8pt;
+    color: var(--text-faint);
+  }
+}
+
+/* The report markup exists in the DOM only while printing. */
+.report { display: none; }

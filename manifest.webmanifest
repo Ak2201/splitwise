@@ -1,0 +1,14 @@
+{
+  "name": "Splitly",
+  "short_name": "Splitly",
+  "description": "Split shared expenses with friends. Everything stays in your browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f7f8",
+  "theme_color": "#14866b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
